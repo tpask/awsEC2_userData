@@ -1,0 +1,24 @@
+#!/bin/bash
+# install aws cli
+curl -O https://bootstrap.pypa.io/get-pip.py
+python get-pip.py 
+pip install awscli
+
+#get instance id:
+instanceId=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+#get region:
+region=$(curl -s http://169.254.169.254/latest/dynamic/instance-identity/document |grep \"region\" | cut -d\" -f4)
+#get hostname:
+host=$(aws ec2 describe-instances --region $region --instance-ids $instanceId --query 'Reservations[].Instances[].Tags[?Key==`Name`].Value' --output text)
+#get my SNS 
+topic=$(aws ssm get-parameter --region $region --output text --name "notifyTechteam" |awk '{print $6}')
+
+#CHANGE HOSTNAME
+hostnamectl set-hostname $host
+hostname $host
+echo "127.0.0.1  localhost  $host" >/etc/hosts
+echo "HOSTNAME=$host" >>/etc/sysconfig/network
+
+#notify via sns when done:
+aws sns publish --topic-arn $topic --region $region  --message "$host is up"
+
